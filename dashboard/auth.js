@@ -13,7 +13,7 @@ async function getSession() {
 async function requireSignIn() {
   const session = await getSession();
   if (!session) {
-    const back = encodeURIComponent(location.pathname.split("/").pop() || "projects.html");
+    const back = encodeURIComponent((location.pathname.split("/").pop() || "projects.html") + location.search);
     location.replace(`login.html?next=${back}`);
     return null;
   }

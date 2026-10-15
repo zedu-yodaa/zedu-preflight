@@ -1,0 +1,15 @@
+{
+  "name": "zedu-preflight",
+  "private": true,
+  "description": "Pre-release automated tester for Zedu (Team Yoda, HNG 15)",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "results": "node scripts/process-results.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

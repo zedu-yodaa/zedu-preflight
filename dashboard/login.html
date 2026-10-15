@@ -44,7 +44,7 @@
     </section>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
   <script src="config.js"></script>
   <script src="auth.js"></script>
   <script>
@@ -54,7 +54,8 @@
     const submit = document.getElementById("submit");
     const message = document.getElementById("message");
     const params = new URLSearchParams(location.search);
-    const next = /^[\w-]+\.html$/.test(params.get("next") || "") ? params.get("next") : "projects.html";
+    // Only same-site pages like "run.html?id=5" (no other hosts or paths).
+    const next = /^[\w-]+\.html(\?[\w=&%-]*)?$/.test(params.get("next") || "") ? params.get("next") : "projects.html";
 
     function show(text, kind) {
       message.innerHTML = text ? `<p class="notice ${kind}"></p>` : "";

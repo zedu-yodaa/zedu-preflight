@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en-GB" class="checking">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run · Zedu Preflight</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="projects.html"><span class="mark">Z</span> Zedu Preflight</a>
+    <div class="who"><span id="user-email"></span><button class="btn-ghost" id="sign-out">Sign out</button></div>
+  </header>
+
+  <main>
+    <p><a href="projects.html">← All runs</a></p>
+    <div id="run"><p class="muted">Loading run…</p></div>
+    <div id="tests"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="ui.js"></script>
+  <script>
+    const runEl = document.getElementById("run");
+    const testsEl = document.getElementById("tests");
+    const id = Number(new URLSearchParams(location.search).get("id"));
+
+    function testRow(t) {
+      const err = t.error || {};
+      const details = err.message || err.stack ? `
+        <details>
+          <summary>Error log</summary>
+          <pre>${esc(err.message || "")}${err.stack ? "\n\n" + esc(err.stack) : ""}</pre>
+        </details>` : "";
+      const evidence = [t.screenshot_path && `Screenshot: <code>${esc(t.screenshot_path)}</code>`, t.trace_path && `Trace: <code>${esc(t.trace_path)}</code>`]
+        .filter(Boolean).join(" · ");
+      return `
+        <div class="test ${esc(t.status)}">
+          <div class="test-head">
+            ${statusBadge(t.status)}
+            <div class="test-name">
+              <b>${esc(t.name)}</b>
+              <div class="meta">${esc(t.feature || "general")} · ${esc(t.priority || "P0")} · <code>${esc(t.file || "")}${t.line ? ":" + t.line : ""}</code> · ${esc(formatDuration(t.duration_ms))}${t.retries ? ` · ${t.retries} retr${t.retries === 1 ? "y" : "ies"}` : ""}</div>
+            </div>
+          </div>
+          ${err.reason ? `<p class="reason">${esc(err.reason)}</p>` : ""}
+          ${evidence ? `<div class="meta evidence">${evidence}</div>` : ""}
+          ${details}
+        </div>`;
+    }
+
+    async function load() {
+      if (!Number.isInteger(id) || id <= 0) return showError(runEl, "No run selected.");
+
+      const [{ data: run, error: runErr }, { data: tests, error: testsErr }] = await Promise.all([
+        db.from("runs").select("*").eq("id", id).maybeSingle(),
+        db.from("test_results").select("*").eq("run_id", id).order("id"),
+      ]);
+      if (runErr || testsErr) return showError(runEl, `Couldn't load this run: ${(runErr || testsErr).message}`);
+      if (!run) return showError(runEl, "Run not found.");
+
+      document.title = `${run.verdict} · ${run.project} · Zedu Preflight`;
+      const ghUrl = safeRunUrl(run.url);
+      const runnerErrors = (run.runner_errors || []).map((e) => `<li>${esc(e.message)}</li>`).join("");
+
+      runEl.innerHTML = `
+        <section class="project-card">
+          <div>
+            <h2>${esc(run.project)} <span class="env">${esc(run.environment)}</span></h2>
+            <div class="meta">Branch <code>${esc(run.branch || "–")}</code> · Commit <code>${esc(shortSha(run.commit_sha))}</code>
+              ${run.commit_message ? `“${esc(run.commit_message)}”` : ""} · ${esc(run.trigger || "–")} · ${esc(formatDate(run.created_at))} · ${esc(formatDuration(run.duration_ms))}</div>
+            <p class="reason-big">${esc(run.reason || "")}</p>
+            <div class="counts">
+              <span><b>${run.passed}</b> passed</span><span class="t-fail"><b>${run.failed}</b> failed</span>
+              <span class="t-warn"><b>${run.flaky}</b> flaky</span><span><b>${run.skipped}</b> skipped</span>
+            </div>
+            ${runnerErrors ? `<ul class="notice error runner-errors">${runnerErrors}</ul>` : ""}
+            ${ghUrl ? `<p class="meta"><a href="${esc(ghUrl)}" target="_blank" rel="noopener">Open the GitHub Actions run</a> to download screenshots, traces and the HTML report (artifact <code>preflight-evidence</code>).</p>` : ""}
+          </div>
+          ${verdictBadge(run.verdict)}
+        </section>`;
+
+      // Problems first (failed, then flaky), then the rest.
+      const order = { failed: 0, flaky: 1, passed: 2, skipped: 3 };
+      const sorted = [...tests].sort((a, b) => order[a.status] - order[b.status]);
+      const problems = sorted.filter((t) => t.status === "failed" || t.status === "flaky");
+      const rest = sorted.filter((t) => t.status !== "failed" && t.status !== "flaky");
+
+      testsEl.innerHTML = `
+        <h2 class="section-title">Needs attention (${problems.length})</h2>
+        ${problems.length ? problems.map(testRow).join("") : `<p class="muted">Nothing failed. 🎉</p>`}
+        <details class="others" ${problems.length ? "" : "open"}>
+          <summary class="section-title">Passed and skipped (${rest.length})</summary>
+          ${rest.map(testRow).join("")}
+        </details>`;
+    }
+
+    (async () => {
+      if (!configured) {
+        document.documentElement.classList.remove("checking");
+        return showNotConfigured(document.querySelector("main"));
+      }
+      const session = await requireSignIn();
+      if (!session) return;
+      document.getElementById("user-email").textContent = session.user.email;
+      await load();
+      db.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") location.replace("login.html?signedout=1"); });
+    })();
+
+    document.getElementById("sign-out").addEventListener("click", signOut);
+  </script>
+</body>
+</html>
