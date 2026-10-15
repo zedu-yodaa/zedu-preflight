@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en-GB" class="checking">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Projects · Zedu Preflight</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="projects.html"><span class="mark">Z</span> Zedu Preflight</a>
+    <div class="who"><span id="user-email"></span><button class="btn-ghost" id="sign-out">Sign out</button></div>
+  </header>
+
+  <main>
+    <div class="page-head">
+      <h1>Projects</h1>
+      <button class="btn-small" id="refresh">Refresh</button>
+    </div>
+
+    <div id="projects"><p class="muted">Loading runs…</p></div>
+
+    <h2 class="section-title">Run history</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Verdict</th><th>Project</th><th>Branch</th><th>Commit</th><th>Trigger</th><th>Tests</th><th>Duration</th><th>Date</th></tr>
+        </thead>
+        <tbody id="runs"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="ui.js"></script>
+  <script>
+    const projectsEl = document.getElementById("projects");
+    const runsEl = document.getElementById("runs");
+
+    // Runs newest first (FR-18). Signed-in users can read; RLS blocks everyone else.
+    async function load() {
+      const { data: runs, error } = await db
+        .from("runs")
+        .select("id, project, environment, branch, commit_sha, commit_message, trigger, verdict, reason, total, passed, failed, flaky, skipped, duration_ms, created_at")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (error) {
+        runsEl.innerHTML = "";
+        return showError(projectsEl, `Couldn't load runs: ${error.message}`);
+      }
+      if (!runs.length) {
+        projectsEl.innerHTML = `<section class="project-card"><div><h2>No runs yet</h2>
+          <div class="meta">Results appear here after the first Preflight run in GitHub Actions.</div></div></section>`;
+        runsEl.innerHTML = `<tr><td colspan="8" class="muted">No runs yet.</td></tr>`;
+        return;
+      }
+
+      // One card per project/environment, showing its latest run.
+      const latest = new Map();
+      for (const r of runs) {
+        const key = `${r.project}/${r.environment}`;
+        if (!latest.has(key)) latest.set(key, r);
+      }
+      projectsEl.innerHTML = [...latest.values()].map((r) => `
+        <a class="project-card link-card" href="run.html?id=${r.id}">
+          <div>
+            <h2>${esc(r.project)} <span class="env">${esc(r.environment)}</span></h2>
+            <div class="meta">Branch <code>${esc(r.branch || "–")}</code> · Last run ${esc(timeAgo(r.created_at))} · ${esc(r.reason || "")}</div>
+          </div>
+          ${verdictBadge(r.verdict)}
+        </a>`).join("");
+
+      runsEl.innerHTML = runs.map((r) => `
+        <tr class="row-link" data-id="${r.id}" tabindex="0">
+          <td>${verdictBadge(r.verdict)}</td>
+          <td>${esc(r.project)}</td>
+          <td><code>${esc(r.branch || "–")}</code></td>
+          <td><code title="${esc(r.commit_message || "")}">${esc(shortSha(r.commit_sha))}</code></td>
+          <td>${esc(r.trigger || "–")}</td>
+          <td>${r.passed}/${r.total} passed${r.failed ? ` · <b class="t-fail">${r.failed} failed</b>` : ""}${r.flaky ? ` · <span class="t-warn">${r.flaky} flaky</span>` : ""}</td>
+          <td>${esc(formatDuration(r.duration_ms))}</td>
+          <td>${esc(formatDate(r.created_at))}</td>
+        </tr>`).join("");
+    }
+
+    const openRow = (row) => row && (location.href = `run.html?id=${encodeURIComponent(row.dataset.id)}`);
+    runsEl.addEventListener("click", (e) => openRow(e.target.closest("tr[data-id]")));
+    runsEl.addEventListener("keydown", (e) => { if (e.key === "Enter") openRow(e.target.closest("tr[data-id]")); });
+
+    (async () => {
+      if (!configured) {
+        document.documentElement.classList.remove("checking");
+        return showNotConfigured(document.querySelector("main"));
+      }
+      const session = await requireSignIn();
+      if (!session) return;
+      document.getElementById("user-email").textContent = session.user.email;
+      await load();
+
+      document.getElementById("refresh").addEventListener("click", load);
+      // Signing out in another tab also signs out here.
+      db.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") location.replace("login.html?signedout=1"); });
+    })();
+
+    document.getElementById("sign-out").addEventListener("click", signOut);
+  </script>
+</body>
+</html>

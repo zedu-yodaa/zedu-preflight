@@ -8,7 +8,7 @@ Preflight runs automated browser checks against Zedu's staging site and tells th
 Push / PR / Run now / Nightly
         → GitHub Actions runs Playwright tests (headless Chromium, staging only)
         → scripts/process-results.mjs works out the verdict
-        → results sent to the dashboard (Next.js on Vercel + Supabase)
+        → results sent to the dashboard (Vercel + Supabase)
         → Zedu channel alert when a run fails
 ```
 
@@ -19,7 +19,7 @@ Each squad works **only in its own folder** (PRD working rules).
 | Folder | What lives here | Owner |
 | --- | --- | --- |
 | `tests/<feature>/` | Playwright tests, one folder per feature: `auth`, `channels`, `messaging`, `threads`, `files`, `notifications`, `calls`, `search`, `settings` | Test squads |
-| `dashboard/` | Next.js dashboard and results API | Dashboard and API squad |
+| `dashboard/` | Dashboard (HTML + Supabase) and results API (Vercel function) ([setup](dashboard/README.md)) | Dashboard and API squad |
 | `scripts/` | Results processing: verdict and upload ([details](scripts/README.md)) | Results processing |
 | `.github/workflows/` | GitHub Actions workflow | Platform and CI squad |
 | `docs/` | Guides, demo script, workflow snippets | Docs squad |
@@ -51,6 +51,17 @@ Try the results processing on the sample report (needs Node 18+, nothing to inst
 ```bash
 node scripts/process-results.mjs --report sample/results.json
 ```
+
+Run the tests locally against staging (Node 18+):
+
+```bash
+npm ci --ignore-scripts
+npx playwright install chromium
+ZEDU_BASE_URL=https://<zedu-staging-url> npx playwright test
+node scripts/process-results.mjs --dry-run
+```
+
+To get runs onto the dashboard, follow the one-time setup in [dashboard/README.md](dashboard/README.md).
 
 ## Status
 
