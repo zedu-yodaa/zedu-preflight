@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Zedu Preflight</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <section class="login-brand">
+      <div class="logo"><span class="mark">Z</span> Zedu Preflight</div>
+      <div>
+        <h1>Know if Zedu is ready to ship.</h1>
+        <p>Automated tests run on staging after every change. Sign in to see the verdict and the evidence behind it.</p>
+        <div class="verdict-legend" aria-label="Verdict colours">
+          <span><i class="dot" style="background:var(--v-ready)"></i>Ready</span>
+          <span><i class="dot" style="background:var(--v-warn)"></i>Ready with warnings</span>
+          <span><i class="dot" style="background:var(--v-notready)"></i>Not Ready</span>
+          <span><i class="dot" style="background:var(--v-running)"></i>Running</span>
+        </div>
+      </div>
+      <small style="opacity:.6">Team Yoda · HNG Internship</small>
+    </section>
+
+    <section class="login-panel">
+      <form id="login-form" class="card" novalidate>
+        <h2>Sign in</h2>
+        <p class="sub">Use your team test account.</p>
+        <div id="message" role="alert" aria-live="polite"></div>
+
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" required>
+
+        <label for="password">Password</label>
+        <div class="field">
+          <input id="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="toggle-pw" id="toggle-pw" aria-controls="password" aria-label="Show password">Show</button>
+        </div>
+
+        <button type="submit" class="btn" id="submit">Sign in</button>
+        <p class="hint">Only signed-in team members can see test results.</p>
+      </form>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    const form = document.getElementById("login-form");
+    const email = document.getElementById("email");
+    const password = document.getElementById("password");
+    const submit = document.getElementById("submit");
+    const message = document.getElementById("message");
+    const params = new URLSearchParams(location.search);
+    const next = /^[\w-]+\.html$/.test(params.get("next") || "") ? params.get("next") : "projects.html";
+
+    function show(text, kind) {
+      message.innerHTML = text ? `<p class="notice ${kind}"></p>` : "";
+      if (text) message.firstChild.textContent = text;
+    }
+
+    document.getElementById("toggle-pw").addEventListener("click", (e) => {
+      const hidden = password.type === "password";
+      password.type = hidden ? "text" : "password";
+      e.target.textContent = hidden ? "Hide" : "Show";
+      e.target.setAttribute("aria-label", hidden ? "Hide password" : "Show password");
+    });
+
+    (async () => {
+      if (!configured) return showNotConfigured(form);
+      if (params.get("signedout")) show("You've been signed out.", "ok");
+      else if (params.get("next")) show("Please sign in to continue.", "warn");
+      // Already signed in? Skip the form.
+      if (await getSession()) location.replace(next);
+    })();
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      email.removeAttribute("aria-invalid");
+      password.removeAttribute("aria-invalid");
+      if (!email.value.trim() || !password.value) {
+        if (!email.value.trim()) email.setAttribute("aria-invalid", "true");
+        if (!password.value) password.setAttribute("aria-invalid", "true");
+        return show("Enter your email and password.", "error");
+      }
+      if (!configured) return show("Sign-in isn't connected yet (see config.js).", "error");
+
+      submit.disabled = true;
+      submit.textContent = "Signing in…";
+      const { error } = await db.auth.signInWithPassword({ email: email.value.trim(), password: password.value });
+      if (error) {
+        submit.disabled = false;
+        submit.textContent = "Sign in";
+        password.value = "";
+        password.setAttribute("aria-invalid", "true");
+        password.focus();
+        return show(/invalid login/i.test(error.message) ? "Incorrect email or password. Please try again." : error.message, "error");
+      }
+      location.replace(next);
+    });
+  </script>
+</body>
+</html>
