@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en-GB" class="checking">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Projects · Zedu Preflight</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo"><span class="mark">Z</span> Zedu Preflight</div>
+    <div class="who"><span id="user-email"></span><button class="btn-ghost" id="sign-out">Sign out</button></div>
+  </header>
+
+  <main>
+    <div class="page-head">
+      <h1>Projects</h1>
+      <span class="tag-sample">Sample data until the results API is connected</span>
+    </div>
+
+    <section class="project-card" aria-label="Zedu project">
+      <div>
+        <h2>Zedu web app</h2>
+        <div class="meta">Branch <code>dev</code> · Staging · Last run 12 minutes ago</div>
+      </div>
+      <span class="badge warn"><i class="dot" style="background:var(--v-warn)"></i>Ready with warnings</span>
+    </section>
+
+    <h2 style="font-size:18px;margin:0 0 12px">Run history</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Run</th><th>Branch</th><th>Commit</th><th>Trigger</th><th>Verdict</th><th>Duration</th><th>Date</th></tr>
+        </thead>
+        <tbody id="runs"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    // Sample runs shaped like the FRD's runs table (section 4.1), newest first (FR-18).
+    const runs = [
+      { id: 128, branch: "dev", commit: "a75300e", trigger: "push", verdict: "warn", duration: "6m 52s", date: "15 Oct 2026, 14:05" },
+      { id: 127, branch: "dev", commit: "9bdd45c", trigger: "schedule", verdict: "ready", duration: "6m 31s", date: "15 Oct 2026, 02:00" },
+      { id: 126, branch: "fix/login-redirect", commit: "40531cf", trigger: "pull_request", verdict: "notready", duration: "4m 10s", date: "14 Oct 2026, 17:22" },
+      { id: 125, branch: "dev", commit: "32d8108", trigger: "manual", verdict: "ready", duration: "6m 44s", date: "14 Oct 2026, 11:48" },
+    ];
+    const labels = { ready: "Ready", warn: "Ready with warnings", notready: "Not Ready", running: "Running" };
+    const colours = { ready: "var(--v-ready)", warn: "var(--v-warn)", notready: "var(--v-notready)", running: "var(--v-running)" };
+
+    (async () => {
+      if (!configured) {
+        document.documentElement.classList.remove("checking");
+        return showNotConfigured(document.querySelector("main"));
+      }
+      const session = await requireSignIn();
+      if (!session) return;
+      document.getElementById("user-email").textContent = session.user.email;
+
+      document.getElementById("runs").innerHTML = runs.map((r) => `
+        <tr>
+          <td>#${r.id}</td><td><code>${r.branch}</code></td><td><code>${r.commit}</code></td><td>${r.trigger}</td>
+          <td><span class="badge ${r.verdict}"><i class="dot" style="background:${colours[r.verdict]}"></i>${labels[r.verdict]}</span></td>
+          <td>${r.duration}</td><td>${r.date}</td>
+        </tr>`).join("");
+
+      // Signing out in another tab also signs out here.
+      db.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") location.replace("login.html?signedout=1"); });
+    })();
+
+    document.getElementById("sign-out").addEventListener("click", signOut);
+  </script>
+</body>
+</html>
