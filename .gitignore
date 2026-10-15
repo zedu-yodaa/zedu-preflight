@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+/results.json
+/results-payload.json
+test-results/
+playwright-report/
+blob-report/
+playwright/.auth/
+.DS_Store
