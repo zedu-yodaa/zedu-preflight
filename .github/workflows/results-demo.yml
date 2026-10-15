@@ -1,0 +1,21 @@
+name: Results processing demo
+
+on:
+  workflow_dispatch:        # "Run workflow" button
+  push:
+    paths:
+      - "scripts/**"
+      - "sample/**"
+
+permissions:
+  contents: read            # read-only token (PRD security rule)
+
+jobs:
+  process-results:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2, pinned per PRD
+
+      - name: Process sample Playwright report
+        run: node scripts/process-results.mjs --report sample/results.json --out results-payload.json --dry-run
