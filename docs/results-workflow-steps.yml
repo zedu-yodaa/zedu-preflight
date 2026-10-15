@@ -1,0 +1,33 @@
+# Add these steps to the Preflight GitHub Actions job, AFTER the Playwright test step.
+#
+# 1) playwright.config.ts must write a JSON report, e.g.:
+#      reporter: [['list'], ['json', { outputFile: 'results.json' }], ['html', { open: 'never' }]],
+#      use: { screenshot: 'only-on-failure', trace: 'on-first-retry' },
+#      retries: process.env.CI ? 2 : 0,
+#
+# 2) The test step must not stop the job when tests fail, so results still get processed:
+
+      - name: Run Playwright tests
+        run: npx playwright test
+        continue-on-error: true
+
+      - name: Process results and send to dashboard
+        if: always()
+        run: node scripts/process-results.mjs --report results.json --out results-payload.json --fail-on-not-ready
+        env:
+          PREFLIGHT_RESULTS_URL: ${{ vars.PREFLIGHT_RESULTS_URL }}
+          PREFLIGHT_API_KEY: ${{ secrets.PREFLIGHT_API_KEY }}
+          PREFLIGHT_PROJECT: zedu
+          PREFLIGHT_ENVIRONMENT: staging
+
+      - name: Upload evidence (report, screenshots, traces)
+        if: always()
+        uses: actions/upload-artifact@v4   # pin to a commit SHA per the PRD's supply-chain rule
+        with:
+          name: preflight-evidence
+          path: |
+            results.json
+            results-payload.json
+            test-results/
+            playwright-report/
+          retention-days: 14
